@@ -1,0 +1,878 @@
+    <script>
+const Weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+let lastLoad = "<none>";
+const loadedData = {
+    prop_day: null, prop_day_color: null,
+    prop_night: null, prop_night_color: null,
+    noise_floor: null, noise_floor_color: null,
+    sfi: null, sfi_color: null,
+    geomag: null, geomag_color: null
+};
+
+window.addEventListener("load", () => {
+    document.querySelectorAll("svg#SVGRoot .val").forEach(el => el.addEventListener("animationend", ev => {
+        const key = ev.target.getAttribute("data-key");
+        if (ev.target.classList.contains("fade-out")) {
+            ev.target.children[0].textContent = loadedData[key];
+            const color = loadedData[key + "_color"];
+            if (color) {
+                ["good", "fair", "poor", "undefined"].forEach(c => c !== color && ev.target.classList.remove(c));
+                ev.target.classList.add(color);
+            }
+            ev.target.classList.remove("fade-out");
+            ev.target.getAnimations().forEach(an => an.cancel());
+            ev.target.classList.add("fade-in");
+        } else if (ev.target.classList.contains("fade-in")) {
+            ev.target.classList.remove("fade-in");
+        }
+    }));
+	
+	const updateConditions = async () => {
+		setTimeout(updateConditions, 60 * 60 * 1000);
+
+		try {
+			const data = await fetch("https://api.cors.lol/?url=https://hamqsl.com/solarxml.php")
+				.then(r => r.ok ? r : Promise.reject(`response code: ${r.status} ${r.statusText}`))
+				.then(r => r.text())
+				.then(xml => new DOMParser().parseFromString(xml, "text/xml"));
+
+			Object.assign(loadedData, {
+				prop_day: data.querySelector("calculatedconditions band[name='80m-40m'][time='day']").textContent,
+				prop_night: data.querySelector("calculatedconditions band[name='80m-40m'][time='night']").textContent,
+				noise_floor: data.querySelector("signalnoise").textContent,
+				sfi: data.querySelector("solarflux").textContent
+			});
+
+			const kindexVal = parseInt(data.querySelector("kindex").textContent.trim());
+			Object.assign(loadedData, [
+				{ geomag: "Inactive", geomag_color: "good" },
+				{ geomag: "Very quiet", geomag_color: "good" },
+				{ geomag: "Quiet", geomag_color: "good" },
+				{ geomag: "Unsettled", geomag_color: "fair" },
+				{ geomag: "Active", geomag_color: "fair" },
+				{ geomag: "Min. storm", geomag_color: "poor" },
+				{ geomag: "Maj. storm", geomag_color: "poor" },
+				{ geomag: "Sevr. storm", geomag_color: "poor" },
+				{ geomag: "Extr. storm", geomag_color: "poor" }
+			][kindexVal]);
+
+			const CondColorMap = { Good: "good", Fair: "fair", Poor: "poor" };
+			Object.assign(loadedData, {
+				prop_day_color: CondColorMap[loadedData.prop_day] || "fair",
+				prop_night_color: CondColorMap[loadedData.prop_night] || "fair",
+				noise_floor_color: ["good", "good", "fair", "poor", "poor"][parseInt(loadedData.noise_floor.at(-1))]
+			});
+
+			document.querySelectorAll("svg#SVGRoot .val[data-key]").forEach(e => e.classList.add("fade-out"));
+			lastLoad = new Date().toISOString();
+		} catch (e) {
+			console.error(e);
+		}
+	};
+
+    updateConditions();
+
+    const clockUTC = document.querySelector("#clock-utc .val");
+    const clockMSK = document.querySelector("#clock-msk .val");
+
+    const updateClocks = () => {
+        const now = new Date();
+        clockUTC.children[0].textContent = `${Weekdays[now.getUTCDay()]} ${now.toISOString().slice(0, 10)}`;
+        clockUTC.children[1].textContent = now.toISOString().slice(11, 19);
+
+        const dateMSK = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+        clockMSK.children[0].textContent = `${Weekdays[dateMSK.getUTCDay()]} ${dateMSK.toISOString().slice(0, 10)}`;
+        clockMSK.children[1].textContent = dateMSK.toISOString().slice(11, 19);
+
+        window.requestAnimationFrame(updateClocks);
+    };
+    updateClocks();
+});
+
+
+    </script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html {
+      overflow: hidden; 
+      transform: scale(0.9); 
+      transform-origin: 0 0; 
+      background: black;
+    }
+
+    #status {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-family: Cantarell;
+      font-size: 16pt;
+      white-space: pre;
+    }
+
+    @keyframes fade {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .fade-out, .fade-in {
+      animation-name: fade;
+      animation-duration: 0.5s;
+      animation-timing-function: cubic-bezier(1,0,0,1);
+    }
+
+    .fade-out { animation-direction: normal; }
+    .fade-in { animation-direction: reverse; }
+
+	#bar {
+  position: absolute;
+  right: 30%;
+  top: 0;
+  width: 35%;
+  height: auto;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+#visualizer {
+  position: absolute;
+  right: 30%;
+  top: 0;
+  width: 35%;
+  height: 100%;
+  background: black;
+  z-index: 0;
+}
+#turnOnButton {
+    position: absolute;
+    top: 50%;
+    right: 5%;
+    width: 10%;
+    height: 50px;
+    background-color: #111;
+    color: #FF0000;
+    font-size: 16pt;
+    text-align: center;
+    line-height: 50px;
+    border-radius: 25px;
+    border: 2px solid #FF0000;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.6);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 9999;
+}
+
+#turnOnButton:hover {
+    background-color: #333;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 1);
+}
+
+#turnOnButton:active {
+    background-color: #FF0000;
+    color: #111;
+}
+
+  </style>
+  <title>UVB 76</title>
+</head>
+<body>
+<button id="turnOnButton">Turn on</button>
+
+  <img id="bar" src="bar.png" alt="Bar Image">
+  <canvas id="visualizer"></canvas>
+<script>
+document.getElementById('bar').style.visibility = 'hidden';
+
+document.addEventListener('DOMContentLoaded', function () {
+  var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  var noiseNode, radioNode;
+  var gainNode = audioContext.createGain();
+  var bufferSize = audioContext.sampleRate * 2;
+
+  var whiteNoiseVolume = 0.015;
+  var sampleVolume = 0.7;
+
+  var audioBuffer;
+  fetch('sample.wav')
+    .then(response => response.arrayBuffer())
+    .then(data => audioContext.decodeAudioData(data))
+    .then(buffer => {
+      audioBuffer = buffer;
+    })
+    .catch(err => console.error('e:', err));
+
+  function createWhiteNoise() {
+    var buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    noiseNode = audioContext.createBufferSource();
+    noiseNode.buffer = buffer;
+    noiseNode.loop = true;
+    var noiseGainNode = audioContext.createGain();
+    noiseGainNode.gain.value = whiteNoiseVolume;
+    noiseNode.connect(noiseGainNode);
+    noiseGainNode.connect(audioContext.destination);
+    noiseGainNode.connect(analyser); 
+  }
+
+  function playSample() {
+    if (audioBuffer) {
+      radioNode = audioContext.createBufferSource();
+      radioNode.buffer = audioBuffer;
+      radioNode.loop = true;
+      var sampleGainNode = audioContext.createGain();
+      sampleGainNode.gain.value = sampleVolume;
+      radioNode.connect(sampleGainNode);
+      sampleGainNode.connect(audioContext.destination);
+      sampleGainNode.connect(analyser); 
+      radioNode.start();
+    } else {
+      console.error('er');
+    }
+  }
+
+  var isOn = false;
+  function turnOn() {
+    radio.play()
+    audioContext.resume().then(function(){
+      createWhiteNoise();
+      noiseNode.start();
+      playSample();
+      drawWaterfall();
+    });
+  }
+
+  function turnOff() {
+	radio.pause()
+    if (noiseNode) {
+      noiseNode.stop();
+      noiseNode = null;
+    }
+    if (radioNode) {
+      radioNode.stop();
+      radioNode = null;
+    }
+    audioContext.suspend();
+  }
+
+  var canvas = document.getElementById('visualizer');
+  var canvasCtx = canvas.getContext('2d');
+  var analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  var bufferLength = analyser.frequencyBinCount;
+  var dataArray = new Uint8Array(bufferLength);
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  var waterfall = [];
+
+function drawWaterfall() {
+  requestAnimationFrame(drawWaterfall);
+
+  analyser.getByteFrequencyData(dataArray);
+  waterfall.unshift([...dataArray]);
+
+  if (waterfall.length > canvas.height) {
+    waterfall.pop();
+  }
+
+  canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const signalMultiplier = 1.8;
+  let threshold = 90;
+  const contrastFactor = 1.3; 
+
+  for (let y = 0; y < waterfall.length; y++) {
+    for (let x = 0; x < bufferLength; x++) {
+      let value = waterfall[y][x];
+
+      if (value < threshold) {
+        value = 0;
+      } else {
+        value = Math.pow((value - threshold) / (255 - threshold), contrastFactor) * 255; 
+      }
+
+      let signalStrength = value * signalMultiplier;
+      signalStrength = Math.min(signalStrength, 255);
+      const brightness = signalStrength / 255;
+
+      const centerFreq = bufferLength / 2;
+      const freqNorm = Math.abs((x - centerFreq) / centerFreq); 
+      const freqBoost = 1 - Math.pow(freqNorm, 2); 
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const distance = Math.sqrt(Math.pow((x / bufferLength) * canvas.width - centerX, 2) + Math.pow(y - centerY, 2));
+      const maxDistance = Math.sqrt(Math.pow(centerX, 2) + Math.pow(centerY, 2));
+
+      const distanceFactor = 1 - distance / maxDistance;
+      const adjustedBrightness = Math.min(1, brightness * distanceFactor * freqBoost * 2); 
+
+      const r = 0;
+      const g = Math.min(255, 250 * adjustedBrightness);
+      const b = Math.min(200, 180 * adjustedBrightness + 50); 
+
+      canvasCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      canvasCtx.fillRect((x / bufferLength) * canvas.width, y, canvas.width / bufferLength, 1);
+    }
+  }
+}
+
+window.addEventListener('keydown', function(event) {
+  if (event.code === 'KeyP') {
+    if (!isOn) {
+
+      document.getElementById('bar').style.visibility = 'visible';
+      document.getElementById('turnOnButton').style.display = 'none';
+      
+      isOn = true;
+	  turnOn();
+    } else {
+	  turnOff();
+      isOn = false;
+    }
+  }
+});
+
+document.getElementById('turnOnButton').addEventListener('click', function() {
+  if (!isOn) {
+	turnOn();
+    document.getElementById('bar').style.visibility = 'visible';
+    document.getElementById('turnOnButton').style.display = 'none';
+ 
+    isOn = true;
+  }
+});
+});
+
+</script>
+<audio id="radio" src="http://topotun.dynu.com:33949/liberpost.audio" type="audio/mpeg"></audio>
+
+</body>
+</html>
+
+<body style="margin: 0;">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1920.0px"
+   height="1080.0px"
+   viewBox="0 0 1920.0 1080.0"
+   version="1.1"
+   id="SVGRoot"
+   sodipodi:docname="template.svg"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#">
+  <style
+     id="style949">.undefined { fill:#aaaaaa; }
+.good { fill:#33d17a; }
+.fair { fill:#f6d32d; }
+.poor { fill:#e01b24; }
+.val {   }
+.inactive { opacity:0.4; }
+</style>
+  <sodipodi:namedview
+     id="namedview137"
+     pagecolor="#000000"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     showgrid="false"
+     inkscape:zoom="5.6568542"
+     inkscape:cx="66.291261"
+     inkscape:cy="1030.9617"
+     inkscape:window-width="1424"
+     inkscape:window-height="1027"
+     inkscape:window-x="2350"
+     inkscape:window-y="23"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g11768"
+     showguides="true">
+    <sodipodi:guide
+       position="45.032969,1026.5908"
+       orientation="1,0"
+       id="guide8409"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="622.65671,1026.5908"
+       orientation="1,0"
+       id="guide9389"
+       inkscape:locked="false" />
+  </sodipodi:namedview>
+  <defs
+     id="defs132">
+    <rect
+       x="44.926434"
+       y="911.747"
+       width="577.73028"
+       height="81.171475"
+       id="rect11486" />
+    <rect
+       x="380.17203"
+       y="864.0694"
+       width="214.72442"
+       height="88.911799"
+       id="rect10573" />
+    <rect
+       x="702.64636"
+       y="883.22817"
+       width="473.34774"
+       height="167.42944"
+       id="rect9617" />
+    <linearGradient
+       id="linearGradient3163"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3161" />
+    </linearGradient>
+    <marker
+       style="overflow:visible"
+       id="TriangleStart-1"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="TriangleStart"
+       markerWidth="3.32399984"
+       markerHeight="3.84277438"
+       viewBox="0 0 5.3244081 6.15538509"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:white;/*literal chrome skill issue*/fill-rule:evenodd;stroke:white;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135-2" />
+    </marker>
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#000000;stroke-width:96;stroke-linejoin:bevel;fill-opacity:1"
+       id="rect366"
+       width="667.47668"
+       height="1080"
+       x="0"
+       y="0" />
+    <g
+       id="g8341"
+       transform="matrix(1.2678895,0,0,1.2678895,18.254364,-24.676628)"
+       style="display:inline;stroke-width:0.788712"
+       inkscape:label="clocks">
+      <g
+         id="clock-utc"
+         transform="translate(-1.6899949,27.863351)"
+         style="display:inline;stroke-width:0.788712"
+         inkscape:label="clock-utc">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:48px;line-height:0.9;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.788712;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="131.92558"
+           y="67.5159"
+           id="text5441-6-6"
+           inkscape:label="clock-utc-val"
+           class="val"><tspan
+             sodipodi:role="line"
+             x="131.92558"
+             y="67.5159"
+             id="tspan5443-7-2"
+             style="stroke-width:0.788712">Sun 2023-03-26</tspan><tspan
+             sodipodi:role="line"
+             x="131.92558"
+             y="110.7159"
+             id="tspan5447-5-9"
+             style="stroke-width:0.788712">13:58:42</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:48px;font-family:Cantarell;-inkscape-font-specification:'Cantarell Bold';fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.788712;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="19.738609"
+           y="89.115898"
+           id="text6799"><tspan
+             sodipodi:role="line"
+             id="tspan6797"
+             x="19.738609"
+             y="89.115898"
+             style="stroke-width:0.788712">UTC</tspan></text>
+      </g>
+      <g
+         id="clock-msk"
+         transform="translate(-2.5059949,0.59002643)"
+         style="stroke-width:0.788712"
+         inkscape:label="clock-msk">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:48px;line-height:0.9;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.788712;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="132.74159"
+           y="196.12111"
+           id="text5441-6"
+           inkscape:label="clock-msk-val"
+           class="val"><tspan
+             sodipodi:role="line"
+             x="132.74159"
+             y="196.12111"
+             id="tspan5443-7"
+             style="stroke-width:0.788712">Sun 2023-03-26</tspan><tspan
+             sodipodi:role="line"
+             x="132.74159"
+             y="239.32111"
+             id="tspan5447-5"
+             style="stroke-width:0.788712">16:58:42</tspan></text>
+        <g
+           id="g6873"
+           style="stroke-width:0.788712"
+           inkscape:label="clock-msk-label">
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:48px;font-family:Cantarell;-inkscape-font-specification:'Cantarell Bold';fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.788712;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="19.738609"
+             y="217.69711"
+             id="text6799-3"><tspan
+               sodipodi:role="line"
+               x="19.738609"
+               y="217.69711"
+               id="tspan6861"
+               style="stroke-width:0.788712">MSK</tspan></text>
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.788712;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="22.114609"
+             y="236.15311"
+             id="text6867"><tspan
+               sodipodi:role="line"
+               id="tspan6865"
+               x="22.114609"
+               y="236.15311"
+               style="stroke-width:0.788712">(UTC+3)</tspan></text>
+        </g>
+      </g>
+    </g>
+    <g
+       id="g8905"
+       inkscape:label="hf-cond"
+       style="display:inline;stroke-width:0.656111"
+       transform="matrix(1.524133,0,0,1.524133,-23.49162,-224.02132)">
+      <text
+         xml:space="preserve"
+         style="display:inline;stroke-width:3.46713;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:33.6517px;font-family:Cantarell;-inkscape-font-specification:'Cantarell Bold';fill:#ffffff;fill-opacity:1;stroke:none;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         x="20.732819"
+         y="334.44867"
+         id="text8345"
+         transform="matrix(1.2678895,0,0,1.2678895,15.077039,-23.928542)"><tspan
+           sodipodi:role="line"
+           id="tspan8343"
+           style="font-size:33.6517px;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:3.46713;stroke-dasharray:none"
+           x="20.732819"
+           y="334.44867">HF Conditions</tspan></text>
+      <g
+         id="sfi"
+         inkscape:label="sfi"
+         style="display:inline;stroke-width:0.790913"
+         transform="matrix(0.8295616,0,0,0.8295616,7.6063178,80.656119)">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:37.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;text-align:end;text-anchor:end;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="502.92313"
+           y="559.09521"
+           id="text8884-5"
+           inkscape:label="sfi-val"
+           class="val"
+           data-key="sfi"><tspan
+             sodipodi:role="line"
+             id="tspan8882-4"
+             x="502.92313"
+             y="559.09521"
+             style="text-align:end;text-anchor:end;fill:#ffffff;fill-opacity:1;stroke-width:5.29911">?</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.6667px;font-family:Cantarell;-inkscape-font-specification:Cantarell;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="43.561295"
+           y="592.22394"
+           id="text8407-6-1"
+           transform="translate(-0.1920003,-33.182065)"><tspan
+             sodipodi:role="line"
+             id="tspan8405-3-5"
+             x="43.561295"
+             y="592.22394"
+             style="stroke-width:5.29911">Solar flux index</tspan></text>
+      </g>
+      <g
+         id="geomag"
+         inkscape:label="geomag"
+         style="display:inline;stroke-width:0.790913"
+         transform="matrix(0.8295616,0,0,0.8295616,7.0709049,125.33391)">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:37.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;text-align:end;text-anchor:end;display:inline;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="503.41919"
+           y="559.04187"
+           id="text8884-5-6"
+           inkscape:label="geomag-val"
+           class="val  undefined"
+           data-key="geomag"><tspan
+             sodipodi:role="line"
+             id="tspan8882-4-5"
+             x="503.41919"
+             y="559.04187"
+             style="text-align:end;text-anchor:end;stroke-width:5.29911">Unknown</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.6667px;font-family:Cantarell;-inkscape-font-specification:Cantarell;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="43.561295"
+           y="592.22394"
+           id="text8407-6-1-6"
+           transform="translate(-0.1920003,-33.182065)"><tspan
+             sodipodi:role="line"
+             id="tspan8405-3-5-9"
+             x="43.561295"
+             y="592.22394"
+             style="stroke-width:5.29911">Geomag. field</tspan></text>
+      </g>
+      <g
+         id="noisefl"
+         style="display:inline;stroke-width:0.790913"
+         inkscape:label="noisefl"
+         transform="matrix(0.8295616,0,0,0.8295616,7.7788005,53.129553)">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:37.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;text-align:end;text-anchor:end;opacity:1;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="502.71521"
+           y="538.42017"
+           id="text8884"
+           inkscape:label="noisefl-val"
+           class="val  undefined"
+           data-key="noise_floor"><tspan
+             sodipodi:role="line"
+             id="tspan8882"
+             x="502.71521"
+             y="538.42017"
+             style="text-align:end;text-anchor:end;stroke-width:5.29911">S?-S?</tspan></text>
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.6667px;font-family:Cantarell;-inkscape-font-specification:Cantarell;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:5.29911;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="40.894623"
+           y="538.36682"
+           id="text8407-6"><tspan
+             sodipodi:role="line"
+             id="tspan8405-3"
+             x="40.894623"
+             y="538.36682"
+             style="stroke-width:5.29911">Noise floor</tspan></text>
+      </g>
+      <g
+         id="band-prop"
+         transform="translate(1.3039833,-1.8875977)"
+         inkscape:label="band-prop"
+         style="display:inline;stroke-width:0.656111">
+        <g
+           id="prop-night"
+           transform="translate(96.637138,0.21999104)"
+           style="stroke-width:0.656111"
+           inkscape:label="prop-night">
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:29.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:4.39594;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="239.33719"
+             y="432.70459"
+             id="text8413-0"><tspan
+               sodipodi:role="line"
+               id="tspan8411-3"
+               x="239.33719"
+               y="432.70459"
+               style="stroke-width:4.39594">Night</tspan></text>
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:37.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill-opacity:1;stroke:none;stroke-width:4.39594;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="238.60118"
+             y="464.97922"
+             id="text8458-6"
+             inkscape:label="prop-night-val"
+             class="val    undefined"
+             data-key="prop_night"><tspan
+               sodipodi:role="line"
+               id="tspan8456-1"
+               x="238.60118"
+               y="464.97922"
+               style="stroke-width:4.39594">Unkn</tspan></text>
+        </g>
+        <g
+           id="prop-day"
+           inkscape:label="prop-day"
+           style="stroke-width:0.656111">
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:29.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:4.39594;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="239.33719"
+             y="432.70459"
+             id="text8413"><tspan
+               sodipodi:role="line"
+               id="tspan8411"
+               x="239.33719"
+               y="432.70459"
+               style="stroke-width:4.39594">Day</tspan></text>
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:37.3333px;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill-opacity:1;stroke:none;stroke-width:4.39594;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+             x="238.60118"
+             y="464.97922"
+             id="text8458"
+             inkscape:label="prop-day-val"
+             class="val  undefined"
+             data-key="prop_day"><tspan
+               sodipodi:role="line"
+               id="tspan8456"
+               x="238.60118"
+               y="464.97922"
+               style="stroke-width:4.39594">Unkn</tspan></text>
+        </g>
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:42.6667px;font-family:Cantarell;-inkscape-font-specification:Cantarell;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:4.39594;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="43.070625"
+           y="468.28113"
+           id="text8407"
+           transform="translate(-1.4959835,-15.065877)"><tspan
+             sodipodi:role="line"
+             id="tspan8405"
+             x="43.070625"
+             y="468.28113"
+             style="stroke-width:4.39594">80-40m</tspan></text>
+      </g>
+    </g>
+    <g
+       id="g8144"
+       transform="translate(19.60264,8.7005892)"
+       inkscape:label="faq">
+      <g
+         id="g11768">
+        <text
+           xml:space="preserve"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:48px;font-family:Cantarell;-inkscape-font-specification:'Cantarell Bold';fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:1;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           x="62.951778"
+           y="1034.1622"
+           id="text6942"><tspan
+             sodipodi:role="line"
+             id="tspan6940"
+             x="62.951778"
+             y="1034.1622">FAQ in the description!</tspan></text>
+        <path
+           style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:6.7;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#TriangleStart-1)"
+           d="m 38.303623,999.92805 v 23.98035"
+           id="path7007-7"
+           sodipodi:nodetypes="cc" />
+        <use
+           x="0"
+           y="0"
+           xlink:href="#path7007-7"
+           id="use386"
+           transform="translate(551.87715)" />
+      </g>
+      <text
+         xml:space="preserve"
+         id="text11484"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:24px;line-height:1.1;font-family:Cantarell;-inkscape-font-specification:Cantarell;text-align:justify;writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect11486);display:inline;opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:6.7;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         transform="translate(-19.60264,-37.831289)"><tspan
+           x="44.925781"
+           y="931.4984"
+           id="tspan1400"><tspan
+             dx="0 0 0 0.21636391 0 0 0 0.21636581 0 0 0 0 0 0 0 0 0.21636963 0 0 0 0 0 0 0.21635437 0 0 0 0 0 0.21635437 0 0 0 0 0 0 0.21635437 0 0 0 0 0 0 0 0 0 0.21635437"
+             id="tspan1398">If the receiver window stays black, something crashed. </tspan></tspan><tspan
+           x="44.925781"
+           y="957.89842"
+           id="tspan1404"><tspan
+             dx="0 0 0 0 0 2.3666725 0 0 2.3666687 0 0 0 0 0 0 0 0 2.3666687 0 0 0 2.3666687 0 0 0 2.366684 0 0 0 0 0 0 0 2.366684 0 0 2.366684 0 0 0 2.3666534 0 0 0 0 0 0 2.3666534 0 0 0 0 2.3666229"
+             id="tspan1402">This is unlikely but may happen. If so, please wait for </tspan></tspan><tspan
+           x="44.925781"
+           y="984.29844"
+           id="tspan1406">the next reload.</tspan></text>
+      <text
+         xml:space="preserve"
+         id="text9615"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:29.3333px;line-height:0;font-family:Cantarell;-inkscape-font-specification:Cantarell;text-align:start;writing-mode:lr-tb;direction:ltr;white-space:pre;shape-inside:url(#rect9617);display:inline;opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:6.7;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         transform="translate(-677.56815,-184.86963)"
+         x="0"
+         y="0"><tspan
+           x="702.64648"
+           y="907.37019"
+           id="tspan1410"><tspan
+             style="line-height:1.1"
+             id="tspan1408">Every 30 minutes, the stream will </tspan></tspan><tspan
+           x="702.64648"
+           y="939.63679"
+           id="tspan1414"><tspan
+             style="line-height:1.1"
+             id="tspan1412">automatically reload the receiver.
+</tspan></tspan><tspan
+           x="702.64648"
+           y="971.90339"
+           id="tspan1418"><tspan
+             style="line-height:1.1"
+             id="tspan1416">When that happens, it will go black </tspan></tspan><tspan
+           x="702.64648"
+           y="1004.17"
+           id="tspan1422"><tspan
+             style="line-height:1.1"
+             id="tspan1420">for a short time, then the waterfall </tspan></tspan><tspan
+           x="702.64648"
+           y="1036.4366"
+           id="tspan1426"><tspan
+             style="line-height:1.1"
+             id="tspan1424">should start building up again.</tspan></tspan></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.6667px;line-height:1.1;font-family:Cantarell;-inkscape-font-specification:Cantarell;fill:#ffffff;fill-opacity:1;stroke-width:6.7;stroke-linejoin:bevel"
+         x="23.712992"
+         y="978.15399"
+         id="text1268"><tspan
+           sodipodi:role="line"
+           id="tspan1266"
+           x="23.712992"
+           y="978.15399">HF propagation data from https://www.hamqsl.com/solar.html.</tspan></text>
+    </g>
+  </g>
+  <metadata
+     id="metadata501">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <cc:license
+           rdf:resource="http://creativecommons.org/publicdomain/zero/1.0/" />
+      </cc:Work>
+      <cc:License
+         rdf:about="http://creativecommons.org/publicdomain/zero/1.0/">
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#Reproduction" />
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#Distribution" />
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#DerivativeWorks" />
+      </cc:License>
+    </rdf:RDF>
+  </metadata>
+</svg>
+
+</body>
+</html>
