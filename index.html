@@ -43,7 +43,10 @@ window.addEventListener("load", () => {
 		setTimeout(updateConditions, 60 * 60 * 1000);
 
 		try {
-			const data = await fetch("https://api.cors.lol/?url=https://hamqsl.com/solarxml.php")
+			const url = "https://hamqsl.com/solarxml.php";
+			const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+
+			const data = await fetch(proxyUrl)
 				.then(r => r.ok ? r : Promise.reject(`response code: ${r.status} ${r.statusText}`))
 				.then(r => r.text())
 				.then(xml => new DOMParser().parseFromString(xml, "text/xml"));
