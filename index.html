@@ -5,12 +5,6 @@ const userAgent = navigator.userAgent.toLowerCase();
 const isMobileUserAgent = /iphone|ipod|android|blackberry|iemobile|opera mini|windows phone/.test(userAgent);
 const isMobileMatchMedia = window.matchMedia('(pointer: coarse)').matches;
 
-
-if (isMobileUserAgent || isMobileMatchMedia) {
-	window.location.href = "https://ws-cdn-video.rule34.xxx/images/4180/6ab5c449eabb8ac48936b2845e22a988.mp4";
-} else {
-	console.log('No mobile detected');
-}
 const Weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 let lastLoad = "<none>";
 const loadedData = {
@@ -214,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var sampleVolume = 0.3;
 
   var audioBuffer;
-  fetch('sample.wav')
+  fetch('sample.mp3')
     .then(response => response.arrayBuffer())
     .then(data => audioContext.decodeAudioData(data))
     .then(buffer => {
