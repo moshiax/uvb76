@@ -38,7 +38,7 @@ window.addEventListener("load", () => {
 
 		try {
 			const url = "https://hamqsl.com/solarxml.php";
-			const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+			const proxyUrl = `https://cors.olegbeznogy.workers.dev/?${encodeURIComponent(url)}`;
 
 			const data = await fetch(proxyUrl)
 				.then(r => r.ok ? r : Promise.reject(`response code: ${r.status} ${r.statusText}`))
